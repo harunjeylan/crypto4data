@@ -8,6 +8,9 @@ export default function Key() {
     const [publicKey, setPublicKey] = useState('');
     const [loading, setLoading] = useState(false);
 
+
+
+
     const handleGenerateKeys = async () => {
         try {
             setLoading(true);

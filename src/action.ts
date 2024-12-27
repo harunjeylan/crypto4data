@@ -1,6 +1,7 @@
 'use server'
 
 import crypto from "crypto"
+import QRCode from "qrcode"
 
 export const generateKeyPair = async () => {
     const { publicKey, privateKey } = crypto.generateKeyPairSync('rsa', {
@@ -41,3 +42,4 @@ export const verifySignature = async (signatureData: string, signature: string, 
     const isValid = verify.verify(publicKey, signature, 'hex');
     return isValid
 };
+
