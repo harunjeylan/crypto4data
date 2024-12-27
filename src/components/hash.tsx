@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import QRCodeGenerator from './qrcode';
 
 export default function Hash() {
-    const [signatureData, setSignatureData] = useState('');
+    const [data, setData] = useState('');
     const [privateKey, setPrivateKey] = useState('');
     const [signature, setSignature] = useState('');
     const [loading, setLoading] = useState(false);
@@ -14,35 +14,23 @@ export default function Hash() {
     const [qrCodeDataURL, setQrCodeDataURL] = useState('');
     const [fileName, setFileName] = useState('');
 
-
-
-    function generateUniqueCode() {
-        const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-        let code = '';
-
-        for (let i = 0; i < 6; i++) {
-            const randomIndex = Math.floor(Math.random() * characters.length);
-            code += characters[randomIndex];
-        }
-        return code
-    }
-
     useEffect(() => {
         const code = generateUniqueCode()
         setCode(code);
-    }, [signatureData])
+    }, [data])
 
     const handleGenerateSignature = async () => {
-        if (!privateKey || !signatureData) {
+        if (!privateKey || !data) {
             alert('Both Private Key and Signature Data are required!');
             return;
         }
         try {
             setLoading(true);
-            const hash = await generateSignature(JSON.stringify({ Code: `${code}`, Data: `${signatureData}` }), privateKey);
-            if (hash) {
-                setSignature(hash)
-                await handleSubmit(hash)
+            const shortHash = await generateSignature(`${data}:${code}`, privateKey);
+            const signatureData = `${data}:${code}:${shortHash}`
+            if (signatureData) {
+                setSignature(signatureData)
+                await handleSubmit(signatureData)
             }
         } catch (error: any) {
             alert('Error generating signature: ' + error.message);
@@ -51,12 +39,12 @@ export default function Hash() {
         }
     };
 
-    const handleSubmit = async (hash: string) => {
+    const handleSubmit = async (signatureData: string) => {
         try {
             const response = await fetch('/api/qrcode', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ hash, code, data: signatureData }),
+                body: JSON.stringify({ signatureData }),
             });
 
             if (response.ok) {
@@ -96,12 +84,12 @@ export default function Hash() {
             </label>
             <label>
                 Signature Data
-                <textarea onChange={(e) => setSignatureData(e.target.value)} rows={8} className='border w-full' />
+                <textarea onChange={(e) => setData(e.target.value)} rows={8} className='border w-full' />
             </label>
             <div>
                 Preview:
                 <p className='border w-full p-4 rounded-md'>
-                    {signatureData && `Code: ${code}; Data: ${signatureData}`}
+                    {data && `Code: ${code}; Data: ${data}`}
                 </p>
             </div>
             <button onClick={handleGenerateSignature} disabled={loading} className='bg-blue-500 px-4 py-2 rounded-md'>
@@ -112,7 +100,7 @@ export default function Hash() {
                 {signature && (
                     <div>
                         <h3>Generated Signature</h3>
-                        <textarea readOnly value={`${signatureData}:${code}:${signature}`} rows={8} className='border w-full' />
+                        <textarea readOnly value={signature} rows={8} className='border w-full' />
                     </div>
                 )}
                 QR Code
@@ -126,4 +114,16 @@ export default function Hash() {
             </div>
         </div>
     );
+}
+
+
+function generateUniqueCode() {
+    const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let code = '';
+
+    for (let i = 0; i < 6; i++) {
+        const randomIndex = Math.floor(Math.random() * characters.length);
+        code += characters[randomIndex];
+    }
+    return code
 }

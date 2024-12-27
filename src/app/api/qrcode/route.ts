@@ -5,10 +5,10 @@ export async function POST(req: NextRequest) {
     try {
         const body = await req.json();
         console.log({ body });
-        const { hash, code, data } = body;
+        const { signatureData } = body;
 
 
-        if (!hash) {
+        if (!signatureData) {
             return NextResponse.json(
                 { error: 'Hash is required' },
                 { status: 400 }
@@ -16,8 +16,9 @@ export async function POST(req: NextRequest) {
         }
 
         // Generate QR Code as a Data URL
-        const qrCodeDataURL = await QRCode.toDataURL(`${data}:${code}:${hash}`);
+        const qrCodeDataURL = await QRCode.toDataURL(signatureData);
 
+        const [data, code, signature] = signatureData.split(":")
         // Return the QR code data and download details
         return NextResponse.json({
             qrCodeDataURL,

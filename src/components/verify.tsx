@@ -17,7 +17,7 @@ export default function Verify() {
         }
         try {
             setLoading(true);
-            const valid = await verifySignature(JSON.stringify({ Code: `${code}`, Data: `${data}` }), signature, publicKey);
+            const valid = await verifySignature(`${data}:${code}`, signature, publicKey);
             setIsValid(valid);
         } catch (error: any) {
             alert('Error verifying signature: ' + error.message);
