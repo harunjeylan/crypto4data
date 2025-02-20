@@ -1,22 +1,28 @@
+import Bulks from "@/components/Bulks";
 import Key from "@/components/key";
-import Hash from "@/components/hash";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import Verify from "@/components/verify";
 
 export default function Home() {
   return (
     <main className="w-full max-w-7xl mx-auto">
       <h1 >Secure ID App</h1>
-      <div className="w-full flex gap-4">
-        <section className="w-full border rounded-md p-4">
+      <Tabs defaultValue="key">
+        <TabsList>
+          <TabsTrigger value="key">Key</TabsTrigger>
+          <TabsTrigger value="bulks">Bulks</TabsTrigger>
+          <TabsTrigger value="verify">Verify</TabsTrigger>
+        </TabsList>
+        <TabsContent value="key">
           <Key />
-        </section>
-        <section className="w-full border rounded-md p-4">
-          <Hash />
-        </section>
-        <section className="w-full border rounded-md p-4">
+        </TabsContent>
+        <TabsContent value="bulks">
+          <Bulks />
+        </TabsContent>
+        <TabsContent value="verify">
           <Verify />
-        </section>
-      </div>
+        </TabsContent>
+      </Tabs>
     </main>
   );
 }

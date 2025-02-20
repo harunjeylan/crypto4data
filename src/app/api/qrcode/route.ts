@@ -4,9 +4,7 @@ import QRCode from 'qrcode';
 export async function POST(req: NextRequest) {
     try {
         const body = await req.json();
-        console.log({ body });
         const { signatureData } = body;
-
 
         if (!signatureData) {
             return NextResponse.json(
@@ -18,11 +16,11 @@ export async function POST(req: NextRequest) {
         // Generate QR Code as a Data URL
         const qrCodeDataURL = await QRCode.toDataURL(signatureData);
 
-        const [data, code, signature] = signatureData.split(":")
-        // Return the QR code data and download details
+        const [name, content, date, code, shortHash] = signatureData.split(":")
+
         return NextResponse.json({
             qrCodeDataURL,
-            fileName: `${data}-${code}.png`,
+            fileName: `${name}-${code}.png`,
         });
     } catch (error) {
         console.error('Error generating QR code:', error);
