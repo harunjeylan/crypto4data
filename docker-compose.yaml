@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: crypto4data
+    ports:
+      - "${MAIN_CLIENT_PORT:-3060}:3060"
+    environment:
+      - NODE_ENV=production
+      - MAIN_CLIENT_PORT=3060
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3060"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
