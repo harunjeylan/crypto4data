@@ -1,23 +1,22 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { Slider } from '@/components/ui/slider';
-import { CertificateTemplate, TextField, QRCodeField, FieldType } from '@/types/template';
-import { saveTemplate, getCurrentTemplate } from '@/lib/template-storage';
-import { Upload, Plus, Trash2, Download, Save, Image as ImageIcon, Type, QrCode, ChevronDown, ArrowLeft } from 'lucide-react';
-import Papa from 'papaparse';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
     DropdownMenu,
     DropdownMenuContent,
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Slider } from '@/components/ui/slider';
+import { getCurrentTemplate, saveTemplate } from '@/lib/template-storage';
+import { CertificateTemplate, FieldType, QRCodeField, TextField } from '@/types/template';
+import { ArrowLeft, ChevronDown, Download, Image as ImageIcon, Plus, QrCode, Save, Trash2, Type } from 'lucide-react';
 import Link from 'next/link';
+import Papa from 'papaparse';
+import { useEffect, useRef, useState } from 'react';
 
 // Utility function to transform text case
 const transformTextCase = (text: string, textCase?: 'uppercase' | 'lowercase' | 'titlecase' | 'none'): string => {
@@ -459,7 +458,7 @@ export default function TemplateBuilder() {
             ];
 
         const csv = Papa.unparse({
-            fields: headers,
+            fields: headers.filter((header): header is string => header !== undefined),
             data: rows,
         });
 
