@@ -4,11 +4,17 @@ import { generateSignature } from '@/action';
 import JSZip from 'jszip';
 import Papa from 'papaparse';
 import { ChangeEvent, useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
+import { Upload, Download, QrCode, FileSpreadsheet, ArrowLeft } from 'lucide-react';
+import Link from 'next/link';
 
 type DataContent = {
     name: string;
-    content: string;
-    date: string;
+    content: string; // Content field for QR code data
     signature?: string;
     qrCodeDataURL?: string;
     fileName?: string;
@@ -24,11 +30,10 @@ export default function Bulks() {
             Papa.parse(e.target.files[0], {
                 complete: (results: any) => {
                     const parsedData: DataContent[] = results.data
-                        .filter((row: any) => row.name && row.content && row.date)
+                        .filter((row: any) => row.name && row.content)
                         .map((row: any) => ({
                             name: row.name,
-                            content: row.content,
-                            date: row.date
+                            content: row.content // Content is used for QR code data
                         }));
                     setData(parsedData);
                 },
@@ -48,8 +53,10 @@ export default function Bulks() {
             data.map(async (entry) => {
                 try {
                     const code = generateUniqueCode();
-                    const shortHash = await generateSignature(`${entry.name}:${entry.content}:${entry.date}:${code}`, privateKey);
-                    const signatureData = `${entry.name}:${entry.content}:${entry.date}:${code}:${shortHash}`;
+                    // Signature includes name and content for QR code data
+                    const shortHash = await generateSignature(`${entry.name}:${entry.content}:${code}`, privateKey);
+                    // QR code data includes name, content, code, and signature
+                    const signatureData = `${entry.name}:${entry.content}:${code}:${shortHash}`;
 
                     const response = await fetch('/api/qrcode', {
                         method: 'POST',
@@ -90,52 +97,128 @@ export default function Bulks() {
     };
 
     return (
-        <div className='space-y-4 py-4'>
-            <h2>Bulk Signature & QR Code Generator</h2>
-            <label>
-                Private Key
-                <textarea onChange={(e) => setPrivateKey(e.target.value)} rows={4} className='border w-full' />
-            </label>
-            <div>
-                <label htmlFor='csvUpload' className='block mb-2'>Upload CSV File:</label>
-                <input type='file' id='csvUpload' accept='.csv' onChange={handleCsvUpload} className='block w-full text-sm text-gray-500' />
+        <div className="fixed inset-0 flex flex-col bg-background overflow-hidden">
+            {/* Top Bar */}
+            <div className="flex-shrink-0 border-b bg-card px-6 py-4">
+                <div className="flex items-center gap-4 mb-4">
+
+                    <div className="flex items-center gap-2">
+                        <FileSpreadsheet className="h-5 w-5" />
+                        <h2 className="text-xl font-semibold">Bulk Signature & QR Code Generator</h2>
+                    </div>
+                    <Button variant="outline" size="sm"  >
+                        <Link href="/" className="flex items-center gap-2">
+                            <ArrowLeft className="h-4 w-4 mr-2" />
+                            Back to Home
+                        </Link>
+                    </Button>
+                </div>
             </div>
-            <div className='flex space-x-4'>
-                <button onClick={handleGenerateSignatures} disabled={loading} className='bg-blue-500 px-4 py-2 rounded-md'>
-                    {loading ? 'Processing...' : 'Generate Signatures & QR Codes'}
-                </button>
-                <button onClick={handleDownloadAll} className='bg-green-500 px-4 py-2 rounded-md'>
-                    Download All as ZIP
-                </button>
-            </div>
-            <div className=''>
-                {data.length > 0 && (
-                    <table className='w-full border mt-4'>
-                        <thead>
-                            <tr>
-                                <th className='border px-4 py-2'>Name</th>
-                                <th className='border px-4 py-2'>Content</th>
-                                <th className='border px-4 py-2'>Date</th>
-                                <th className='border px-4 py-2'>QR Code</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {data.map((entry, index) => (
-                                <tr key={index} className='border'>
-                                    <td className='border px-4 py-2'>{entry.name}</td>
-                                    <td className='border px-4 py-2'>{entry.content}</td>
-                                    <td className='border px-4 py-2'>{entry.date}</td>
-                                    <td className='border px-4 py-2'>
-                                        {entry.qrCodeDataURL && <img src={entry.qrCodeDataURL} alt='QR Code' width={50} />}
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                )}
+
+            {/* Main Content */}
+            <div className="flex-1 overflow-y-auto p-6">
+                <div className="max-w-6xl mx-auto space-y-6">
+                    <Card>
+                        <CardHeader>
+                            <CardTitle className="flex items-center gap-2">
+                                <QrCode className="h-5 w-5" />
+                                Bulk Signature & QR Code Generator
+                            </CardTitle>
+                            <CardDescription>
+                                Upload a CSV file and generate signatures with QR codes for all entries
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                            <div className="space-y-2">
+                                <Label htmlFor="private-key-bulk">Private Key</Label>
+                                <Textarea
+                                    id="private-key-bulk"
+                                    onChange={(e) => setPrivateKey(e.target.value)}
+                                    rows={4}
+                                    className="font-mono text-sm"
+                                    placeholder="Paste your private key here..."
+                                />
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label htmlFor='csvUpload' className='flex items-center gap-2'>
+                                    <FileSpreadsheet className="h-4 w-4" />
+                                    Upload CSV File
+                                </Label>
+                                <Input
+                                    type='file'
+                                    id='csvUpload'
+                                    accept='.csv'
+                                    onChange={handleCsvUpload}
+                                />
+                                {data.length > 0 && (
+                                    <p className="text-sm text-muted-foreground">
+                                        {data.length} entries loaded
+                                    </p>
+                                )}
+                            </div>
+
+                            <div className='flex flex-wrap gap-4'>
+                                <Button
+                                    onClick={handleGenerateSignatures}
+                                    disabled={loading || data.length === 0}
+                                >
+                                    <Upload className="h-4 w-4 mr-2" />
+                                    {loading ? 'Processing...' : 'Generate Signatures & QR Codes'}
+                                </Button>
+                                <Button
+                                    onClick={handleDownloadAll}
+                                    variant="secondary"
+                                    disabled={data.filter(e => e.qrCodeDataURL).length === 0}
+                                >
+                                    <Download className="h-4 w-4 mr-2" />
+                                    Download All as ZIP
+                                </Button>
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    {data.length > 0 && (
+                        <Card>
+                            <CardHeader>
+                                <CardTitle>Generated QR Codes</CardTitle>
+                                <CardDescription>
+                                    {data.filter(e => e.qrCodeDataURL).length} of {data.length} processed
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="overflow-x-auto">
+                                    <table className='w-full border-collapse'>
+                                        <thead>
+                                            <tr className="border-b">
+                                                <th className='px-4 py-3 text-left font-semibold'>Name</th>
+                                                <th className='px-4 py-3 text-left font-semibold'>Content (QR Data)</th>
+                                                <th className='px-4 py-3 text-left font-semibold'>QR Code</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {data.map((entry, index) => (
+                                                <tr key={index} className="border-b hover:bg-muted/50">
+                                                    <td className='px-4 py-3'>{entry.name}</td>
+                                                    <td className='px-4 py-3'>{entry.content}</td>
+                                                    <td className='px-4 py-3'>
+                                                        {entry.qrCodeDataURL ? (
+                                                            <img src={entry.qrCodeDataURL} alt='QR Code' className="w-16 h-16" />
+                                                        ) : (
+                                                            <span className="text-muted-foreground text-sm">Pending...</span>
+                                                        )}
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </CardContent>
+                        </Card>
+                    )}
+                </div>
             </div>
         </div>
-
     );
 }
 

@@ -16,15 +16,17 @@ export const generateSignature = async (signatureData: string, privateKey: strin
     if (!signatureData || !privateKey) {
         throw new Error('Please provide signature data and a private key.');
     }
-
+    console.log('signatureData', signatureData);
     try {
-        const hash = crypto.createHash('sha256').update(signatureData).digest();
+        // Convert private key string to KeyObject
+        const keyObject = crypto.createPrivateKey(privateKey);
 
+        // Create signer and let it handle hashing
         const sign = crypto.createSign('SHA256');
-        sign.update(hash);
+        sign.update(signatureData);
         sign.end();
 
-        const rawSignature = sign.sign(privateKey);
+        const rawSignature = sign.sign(keyObject);
         return rawSignature.toString('base64url');
     } catch (error) {
         console.error('Error generating signature:', error);
@@ -35,17 +37,26 @@ export const generateSignature = async (signatureData: string, privateKey: strin
 
 export const verifySignature = async (signatureData: string, signature: string, publicKey: string) => {
     if (!signatureData || !signature || !publicKey) {
-        alert('Please provide signature data, a signature ID, and a public key.');
+        console.error('Please provide signature data, a signature ID, and a public key.');
         return false;
     }
 
-    const hash = crypto.createHash('sha256').update(signatureData).digest();
+    try {
+        console.log('signatureData', signatureData);
 
-    const verify = crypto.createVerify('SHA256');
-    verify.update(hash);
-    verify.end();
+        // Convert public key string to KeyObject
+        const keyObject = crypto.createPublicKey(publicKey);
 
-    const isValid = verify.verify(publicKey, Buffer.from(signature, 'base64url'));
-    return isValid
+        // Create verifier and let it handle hashing
+        const verify = crypto.createVerify('SHA256');
+        verify.update(signatureData);
+        verify.end();
+
+        const isValid = verify.verify(keyObject, Buffer.from(signature, 'base64url'));
+        return isValid;
+    } catch (error) {
+        console.error('Error verifying signature:', error);
+        return false;
+    }
 };
 

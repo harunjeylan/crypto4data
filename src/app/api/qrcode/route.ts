@@ -16,7 +16,10 @@ export async function POST(req: NextRequest) {
         // Generate QR Code as a Data URL
         const qrCodeDataURL = await QRCode.toDataURL(signatureData);
 
-        const [name, content, date, code, shortHash] = signatureData.split(":")
+        // Parse signature data - format: name:content:code:hash or name:code:hash
+        const parts = signatureData.split(":");
+        const name = parts[0] || 'certificate';
+        const code = parts.length > 2 ? parts[parts.length - 2] : parts[1] || 'UNKNOWN';
 
         return NextResponse.json({
             qrCodeDataURL,
