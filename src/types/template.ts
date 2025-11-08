@@ -7,6 +7,8 @@ export interface TextField {
   y: number;
   fontSize: number;
   fontFamily: string;
+  fontWeight?: 'normal' | 'bold';
+  fontStyle?: 'normal' | 'italic';
   color: string;
   alignment: 'left' | 'center' | 'right';
   textCase?: 'uppercase' | 'lowercase' | 'titlecase' | 'none';
@@ -57,6 +59,8 @@ export interface GeneratedCertificate {
       width?: number;
       alignment?: 'left' | 'center' | 'right';
       color?: string;
+      fontWeight?: 'normal' | 'bold';
+      fontStyle?: 'normal' | 'italic';
     };
   };
   imageDataURL?: string;

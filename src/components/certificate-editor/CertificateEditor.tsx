@@ -9,7 +9,6 @@ import { CertificateTemplate, GeneratedCertificate, TextField } from '@/types/te
 import { ChevronLeft, ChevronRight, Download, FileDown, Archive, ArrowLeft, QrCode, Copy } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import JSZip from 'jszip';
-import jsPDF from 'jspdf';
 
 // Utility function to transform text case
 const transformTextCase = (text: string, textCase?: 'uppercase' | 'lowercase' | 'titlecase' | 'none'): string => {
@@ -20,7 +19,7 @@ const transformTextCase = (text: string, textCase?: 'uppercase' | 'lowercase' | 
         case 'lowercase':
             return text.toLowerCase();
         case 'titlecase':
-            return text.replace(/\w\S*/g, (txt) => 
+            return text.replace(/\w\S*/g, (txt) =>
                 txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase()
             );
         default:
@@ -124,8 +123,10 @@ export default function CertificateEditor({
             const width = adjustments.width ?? field.width;
             const alignment = adjustments.alignment ?? field.alignment;
             const color = adjustments.color ?? field.color;
+            const fontWeight = adjustments.fontWeight ?? field.fontWeight ?? 'normal';
+            const fontStyle = adjustments.fontStyle ?? field.fontStyle ?? 'normal';
 
-            ctx.font = `${fontSize}px ${field.fontFamily}`;
+            ctx.font = `${fontStyle} ${fontWeight} ${fontSize}px ${field.fontFamily}`;
             ctx.textAlign = alignment;
             ctx.textBaseline = 'top';
 
@@ -232,6 +233,8 @@ export default function CertificateEditor({
         width?: number;
         alignment?: 'left' | 'center' | 'right';
         color?: string;
+        fontWeight?: 'normal' | 'bold';
+        fontStyle?: 'normal' | 'italic';
     }) => {
         const updated = certificates.map((cert) => {
             if (cert.id === currentCert.id) {
@@ -433,10 +436,12 @@ export default function CertificateEditor({
                 const fieldX = adjustments.x ?? field.x;
                 const fieldY = adjustments.y ?? field.y;
                 const fontSize = adjustments.fontSize ?? field.fontSize;
+                const fontWeight = adjustments.fontWeight ?? field.fontWeight ?? 'normal';
+                const fontStyle = adjustments.fontStyle ?? field.fontStyle ?? 'normal';
 
                 const ctx = canvas.getContext('2d');
                 if (ctx) {
-                    ctx.font = `${fontSize}px ${field.fontFamily}`;
+                    ctx.font = `${fontStyle} ${fontWeight} ${fontSize}px ${field.fontFamily}`;
                     const text = currentCert.data.fieldValues?.[field.id] || currentCert.data.name || '';
                     const metrics = ctx.measureText(text);
 
@@ -579,8 +584,10 @@ export default function CertificateEditor({
                         const width = adjustments.width ?? field.width;
                         const alignment = adjustments.alignment ?? field.alignment;
                         const color = adjustments.color ?? field.color;
+                        const fontWeight = adjustments.fontWeight ?? field.fontWeight ?? 'normal';
+                        const fontStyle = adjustments.fontStyle ?? field.fontStyle ?? 'normal';
 
-                        ctx.font = `${fontSize}px ${field.fontFamily}`;
+                        ctx.font = `${fontStyle} ${fontWeight} ${fontSize}px ${field.fontFamily}`;
                         ctx.textAlign = alignment;
                         ctx.textBaseline = 'top';
 
@@ -630,97 +637,181 @@ export default function CertificateEditor({
         });
     };
 
-    // Export PDF
+    // Export PDF (server-side with client-side rendering)
     const handleExportPDF = async () => {
+        // Set progress immediately to show the progress bar
         setExportProgress({ progress: 0, isExporting: true, type: 'PDF' });
 
-        try {
-            const PX_TO_MM = 25.4 / 96;
-            const pdfWidth = template.width * PX_TO_MM;
-            const pdfHeight = template.height * PX_TO_MM;
-            const aspectRatio = template.width / template.height;
+        // Use setTimeout to ensure UI updates before starting heavy work
+        setTimeout(async () => {
+            try {
+                const total = certificates.length;
+                const imageDataUrls: string[] = [];
 
-            const pdf = new jsPDF({
-                orientation: aspectRatio > 1 ? 'landscape' : 'portrait',
-                unit: 'mm',
-                format: [pdfWidth, pdfHeight],
-            });
+                // Progress allocation:
+                // 0-70%: Rendering certificates (most time-consuming)
+                // 70-75%: Preparing data
+                // 75-95%: Server processing PDF
+                // 95-100%: Downloading PDF
 
-            const total = certificates.length;
-            for (let i = 0; i < certificates.length; i++) {
-                const cert = certificates[i];
-                const imgData = await renderCertificateImage(cert);
+                setExportProgress({ progress: 1, isExporting: true, type: 'PDF' });
 
-                if (imgData) {
-                    if (i > 0) pdf.addPage();
-                    pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+                // Render each certificate image (one at a time to avoid memory issues)
+                for (let i = 0; i < certificates.length; i++) {
+                    const cert = certificates[i];
+
+                    // Calculate progress range for this certificate
+                    const startProgress = Math.round((i / total) * 70);
+                    const endProgress = Math.round(((i + 1) / total) * 70);
+
+                    // Update progress at start of each certificate
+                    setExportProgress({ progress: startProgress, isExporting: true, type: 'PDF' });
+
+                    try {
+                        // Render certificate image with progress tracking
+                        const imgData = await renderCertificateImage(cert);
+
+                        if (imgData && imgData.startsWith('data:image')) {
+                            imageDataUrls.push(imgData);
+                        } else {
+                            console.warn(`Failed to render certificate ${i + 1}:`, cert.id);
+                        }
+                    } catch (error) {
+                        console.error(`Error rendering certificate ${i + 1}:`, error);
+                        // Continue with other certificates
+                    }
+
+                    // Update progress after each certificate (0-70% range)
+                    setExportProgress({ progress: endProgress, isExporting: true, type: 'PDF' });
+
+                    // Small delay to ensure UI updates and show progress
+                    await new Promise(resolve => setTimeout(resolve, 50));
                 }
 
-                // Update progress
-                const progress = Math.round(((i + 1) / total) * 100);
-                setExportProgress({ progress, isExporting: true, type: 'PDF' });
-            }
+                // Check if we have any images before sending
+                if (imageDataUrls.length === 0) {
+                    throw new Error('No certificate images were rendered. Please check your certificates.');
+                }
 
-            pdf.save('certificates.pdf');
-            setExportProgress({ progress: 100, isExporting: false });
+                // Validate template before sending
+                if (!template || !template.width || !template.height) {
+                    throw new Error('Template is missing required width or height properties');
+                }
 
-            // Hide progress bar after a short delay
-            setTimeout(() => {
+                setExportProgress({ progress: 72, isExporting: true, type: 'PDF' });
+
+                // Prepare request data
+                const requestData = {
+                    template: {
+                        width: template.width,
+                        height: template.height,
+                    },
+                    imageDataUrls,
+                };
+
+                // Prepare request body
+                setExportProgress({ progress: 74, isExporting: true, type: 'PDF' });
+                const requestBody = JSON.stringify(requestData);
+
+                // Send rendered images to server for PDF assembly
+                setExportProgress({ progress: 75, isExporting: true, type: 'PDF' });
+                const response = await fetch('/api/export/pdf', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: requestBody,
+                });
+
+                // Update progress while waiting for response (75-90%)
+                setExportProgress({ progress: 80, isExporting: true, type: 'PDF' });
+
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+                    throw new Error(errorData.error || `Server error: ${response.status}`);
+                }
+
+                setExportProgress({ progress: 90, isExporting: true, type: 'PDF' });
+
+                // Get PDF blob (90-98%)
+                const blob = await response.blob();
+                setExportProgress({ progress: 95, isExporting: true, type: 'PDF' });
+
+                // Create download link
+                const url = window.URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = 'certificates.pdf';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                window.URL.revokeObjectURL(url);
+
+                setExportProgress({ progress: 100, isExporting: false });
+
+                // Hide progress bar after a short delay
+                setTimeout(() => {
+                    setExportProgress({ progress: 0, isExporting: false });
+                }, 500);
+            } catch (error) {
+                console.error('Error exporting PDF:', error);
+                alert(`Failed to export PDF: ${error instanceof Error ? error.message : 'Unknown error'}`);
                 setExportProgress({ progress: 0, isExporting: false });
-            }, 500);
-        } catch (error) {
-            console.error('Error exporting PDF:', error);
-            setExportProgress({ progress: 0, isExporting: false });
-        }
+            }
+        }, 0);
     };
 
     // Export ZIP
     const handleExportZIP = async () => {
+        // Set progress immediately to show the progress bar
         setExportProgress({ progress: 0, isExporting: true, type: 'ZIP' });
 
-        try {
-            const zip = new JSZip();
-            const total = certificates.length;
+        // Use setTimeout to ensure UI updates before starting heavy work
+        setTimeout(async () => {
+            try {
+                const zip = new JSZip();
+                const total = certificates.length;
 
-            for (let i = 0; i < certificates.length; i++) {
-                const cert = certificates[i];
-                const imgData = await renderCertificateImage(cert);
+                for (let i = 0; i < certificates.length; i++) {
+                    const cert = certificates[i];
+                    const imgData = await renderCertificateImage(cert);
 
-                if (imgData) {
-                    const base64Data = imgData.split(',')[1];
-                    const displayName = getDisplayName(cert, template);
-                    const fileName = `${displayName.replace(/[^a-z0-9]/gi, '_')}.png`;
-                    zip.file(fileName, base64Data, { base64: true });
+                    if (imgData) {
+                        const base64Data = imgData.split(',')[1];
+                        const displayName = getDisplayName(cert, template);
+                        const fileName = `${displayName.replace(/[^a-z0-9]/gi, '_')}.png`;
+                        zip.file(fileName, base64Data, { base64: true });
+                    }
+
+                    // Update progress
+                    const progress = Math.round(((i + 1) / total) * 90); // Reserve 10% for zip generation
+                    setExportProgress({ progress, isExporting: true, type: 'ZIP' });
                 }
 
-                // Update progress
-                const progress = Math.round(((i + 1) / total) * 90); // Reserve 10% for zip generation
-                setExportProgress({ progress, isExporting: true, type: 'ZIP' });
-            }
+                setExportProgress({ progress: 95, isExporting: true, type: 'ZIP' });
+                const content = await zip.generateAsync({ type: 'blob' });
 
-            setExportProgress({ progress: 95, isExporting: true, type: 'ZIP' });
-            const content = await zip.generateAsync({ type: 'blob' });
+                setExportProgress({ progress: 100, isExporting: true, type: 'ZIP' });
 
-            setExportProgress({ progress: 100, isExporting: true, type: 'ZIP' });
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(content);
+                link.download = 'certificates.zip';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(link.href);
 
-            const link = document.createElement('a');
-            link.href = URL.createObjectURL(content);
-            link.download = 'certificates.zip';
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            URL.revokeObjectURL(link.href);
+                setExportProgress({ progress: 100, isExporting: false });
 
-            setExportProgress({ progress: 100, isExporting: false });
-
-            // Hide progress bar after a short delay
-            setTimeout(() => {
+                // Hide progress bar after a short delay
+                setTimeout(() => {
+                    setExportProgress({ progress: 0, isExporting: false });
+                }, 500);
+            } catch (error) {
+                console.error('Error exporting ZIP:', error);
                 setExportProgress({ progress: 0, isExporting: false });
-            }, 500);
-        } catch (error) {
-            console.error('Error exporting ZIP:', error);
-            setExportProgress({ progress: 0, isExporting: false });
-        }
+            }
+        }, 0);
     };
 
     // Generate thumbnails
@@ -780,11 +871,25 @@ export default function CertificateEditor({
                             <ArrowLeft className="h-4 w-4 mr-2" />
                             Back
                         </Button>
-                        <Button variant="outline" onClick={handleExportPDF}>
+                        <Button
+                            variant="outline"
+                            onClick={handleExportPDF}
+                            disabled={exportProgress.isExporting && exportProgress.type === 'PDF'}
+                        >
+                            {exportProgress.isExporting && exportProgress.type === 'PDF' && (
+                                <div className="animate-spin rounded-full h-4 w-4 border-2 border-primary border-t-transparent mr-2"></div>
+                            )}
                             <FileDown className="h-4 w-4 mr-2" />
                             Export PDF
                         </Button>
-                        <Button variant="outline" onClick={handleExportZIP}>
+                        <Button
+                            variant="outline"
+                            onClick={handleExportZIP}
+                            disabled={exportProgress.isExporting && exportProgress.type === 'ZIP'}
+                        >
+                            {exportProgress.isExporting && exportProgress.type === 'ZIP' && (
+                                <div className="animate-spin rounded-full h-4 w-4 border-2 border-primary border-t-transparent mr-2"></div>
+                            )}
                             <Archive className="h-4 w-4 mr-2" />
                             Export ZIP
                         </Button>
@@ -825,7 +930,7 @@ export default function CertificateEditor({
                                 {certificates.map((cert, index) => (
                                     <div
                                         key={cert.id}
-                                        className={`flex-shrink-0 cursor-pointer border-2 rounded-lg overflow-hidden transition-all ${currentIndex === index
+                                        className={`max-w-32 flex-shrink-0 cursor-pointer border-2 rounded-lg overflow-hidden transition-all ${currentIndex === index
                                             ? 'border-blue-500 ring-2 ring-blue-200'
                                             : 'border-gray-200 hover:border-gray-300'
                                             }`}
@@ -892,6 +997,8 @@ export default function CertificateEditor({
                             const width = adjustments.width ?? field.width;
                             const alignment = adjustments.alignment ?? field.alignment;
                             const color = adjustments.color ?? field.color;
+                            const fontWeight = adjustments.fontWeight ?? field.fontWeight ?? 'normal';
+                            const fontStyle = adjustments.fontStyle ?? field.fontStyle ?? 'normal';
 
                             return (
                                 <Card
@@ -944,6 +1051,37 @@ export default function CertificateEditor({
                                                 max={72}
                                                 step={1}
                                             />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label className="text-xs">Font Style</Label>
+                                            <div className="flex gap-1">
+                                                <Button
+                                                    variant={fontWeight === 'bold' ? 'default' : 'outline'}
+                                                    size="sm"
+                                                    className="flex-1 h-7 text-xs font-bold"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        updateFieldAdjustment(field.id, {
+                                                            fontWeight: fontWeight === 'bold' ? 'normal' : 'bold'
+                                                        });
+                                                    }}
+                                                >
+                                                    Bold
+                                                </Button>
+                                                <Button
+                                                    variant={fontStyle === 'italic' ? 'default' : 'outline'}
+                                                    size="sm"
+                                                    className="flex-1 h-7 text-xs italic"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        updateFieldAdjustment(field.id, {
+                                                            fontStyle: fontStyle === 'italic' ? 'normal' : 'italic'
+                                                        });
+                                                    }}
+                                                >
+                                                    Italic
+                                                </Button>
+                                            </div>
                                         </div>
                                         <div className="space-y-2">
                                             <div className="flex items-center justify-between">

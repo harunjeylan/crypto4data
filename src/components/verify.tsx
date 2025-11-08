@@ -44,7 +44,7 @@ export default function Verify() {
                         <Shield className="h-5 w-5" />
                         <h2 className="text-xl font-semibold">Verify Signature</h2>
                     </div>
-                    <Button variant="outline" size="sm"  >
+                    <Button variant="outline" size="sm" >
                         <Link href="/" className="flex items-center gap-2">
                             <ArrowLeft className="h-4 w-4 mr-2" />
                             Back to Home

@@ -31,6 +31,10 @@ export default function CertificateGenerator() {
     const [privateKey, setPrivateKey] = useState('');
     const [loading, setLoading] = useState(false);
     const [step, setStep] = useState<'upload' | 'generating' | 'editing'>('upload');
+    const [generationProgress, setGenerationProgress] = useState<{ progress: number; isGenerating: boolean }>({
+        progress: 0,
+        isGenerating: false,
+    });
 
     useEffect(() => {
         const currentTemplate = getCurrentTemplate();
@@ -120,56 +124,70 @@ export default function CertificateGenerator() {
 
         setLoading(true);
         setStep('generating');
+        setGenerationProgress({ progress: 0, isGenerating: true });
 
-        const updatedCertificates = await Promise.all(
-            certificates.map(async (cert) => {
-                try {
-                    const code = generateUniqueCode();
-                    // Use first field value or name for signature
-                    const displayName = cert.data.fieldValues && template.textFields.length > 0
-                        ? (cert.data.fieldValues[template.textFields[0].id] || cert.data.name || '')
-                        : (cert.data.name || '');
-                    const certificateName = cert.data.certificateName || template.name || 'Certificate';
-                    const date = cert.data.date || new Date().toISOString().split('T')[0]; // Default to today's date in YYYY-MM-DD format
-                    const signatureData = `${displayName}:${code}:${certificateName}:${date}`;
-                    const shortHash = await generateSignature(signatureData, privateKey);
-                    const fullSignatureData = `${signatureData}:${shortHash}`;
+        const total = certificates.length;
+        const updatedCertificates: GeneratedCertificate[] = [];
 
-                    // Generate QR code
-                    const response = await fetch('/api/qrcode', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ signatureData: fullSignatureData }),
-                    });
+        // Process certificates one by one to show progress
+        for (let i = 0; i < certificates.length; i++) {
+            const cert = certificates[i];
+            try {
+                const code = generateUniqueCode();
+                // Use first field value or name for signature
+                const displayName = cert.data.fieldValues && template.textFields.length > 0
+                    ? (cert.data.fieldValues[template.textFields[0].id] || cert.data.name || '')
+                    : (cert.data.name || '');
+                const certificateName = cert.data.certificateName || template.name || 'Certificate';
+                const date = cert.data.date || new Date().toISOString().split('T')[0]; // Default to today's date in YYYY-MM-DD format
+                const signatureData = `${displayName}:${code}:${certificateName}:${date}`;
+                const shortHash = await generateSignature(signatureData, privateKey);
+                const fullSignatureData = `${signatureData}:${shortHash}`;
 
-                    let qrCodeDataURL = '';
-                    if (response.ok) {
-                        const { qrCodeDataURL: qr } = await response.json();
-                        qrCodeDataURL = qr;
-                    }
+                // Generate QR code
+                const response = await fetch('/api/qrcode', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ signatureData: fullSignatureData }),
+                });
 
-                    // Generate certificate image
-                    const imageDataURL = await renderCertificate(template, cert.data, qrCodeDataURL);
-
-                    return {
-                        ...cert,
-                        data: {
-                            ...cert.data,
-                            signature: fullSignatureData,
-                            qrCodeDataURL,
-                        },
-                        imageDataURL,
-                    };
-                } catch (error) {
-                    console.error('Error processing certificate:', cert, error);
-                    return cert;
+                let qrCodeDataURL = '';
+                if (response.ok) {
+                    const { qrCodeDataURL: qr } = await response.json();
+                    qrCodeDataURL = qr;
                 }
-            })
-        );
+
+                // Generate certificate image
+                const imageDataURL = await renderCertificate(template, cert.data, qrCodeDataURL);
+
+                updatedCertificates.push({
+                    ...cert,
+                    data: {
+                        ...cert.data,
+                        signature: fullSignatureData,
+                        qrCodeDataURL,
+                    },
+                    imageDataURL,
+                });
+
+                // Update progress
+                const progress = Math.round(((i + 1) / total) * 100);
+                setGenerationProgress({ progress, isGenerating: true });
+            } catch (error) {
+                console.error('Error processing certificate:', cert, error);
+                updatedCertificates.push(cert);
+            }
+        }
 
         setCertificates(updatedCertificates);
         setLoading(false);
+        setGenerationProgress({ progress: 100, isGenerating: false });
         setStep('editing');
+
+        // Hide progress bar after a short delay
+        setTimeout(() => {
+            setGenerationProgress({ progress: 0, isGenerating: false });
+        }, 500);
     };
 
     const renderCertificate = async (
@@ -195,7 +213,9 @@ export default function CertificateGenerator() {
 
                 // Draw text fields
                 template.textFields.forEach((field) => {
-                    ctx.font = `${field.fontSize}px ${field.fontFamily}`;
+                    const fontWeight = field.fontWeight || 'normal';
+                    const fontStyle = field.fontStyle || 'normal';
+                    ctx.font = `${fontStyle} ${fontWeight} ${field.fontSize}px ${field.fontFamily}`;
                     ctx.fillStyle = field.color;
                     ctx.textAlign = field.alignment;
                     ctx.textBaseline = 'top';
@@ -319,24 +339,46 @@ export default function CertificateGenerator() {
                                             onClick={generateCertificates}
                                             disabled={loading || !privateKey || certificates.length === 0 || !template}
                                         >
+                                            {loading && (
+                                                <div className="animate-spin rounded-full h-4 w-4 border-2 border-primary border-t-transparent mr-2"></div>
+                                            )}
                                             <Upload className="h-4 w-4 mr-2" />
                                             {loading ? 'Generating...' : 'Generate Certificates'}
                                         </Button>
                                     </div>
-
-                                    {loading && (
-                                        <div className="p-4 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg">
-                                            <p className="text-sm text-blue-800 dark:text-blue-200">
-                                                Generating certificates... This may take a moment.
-                                            </p>
-                                        </div>
-                                    )}
                                 </>
                             )}
                         </CardContent>
                     </Card>
                 </div>
             </div>
+
+            {/* Floating Progress Bar for Certificate Generation */}
+            {generationProgress.isGenerating && (
+                <div className="fixed bottom-8 left-1/2 transform -translate-x-1/2 z-50 w-96 max-w-[calc(100vw-2rem)]">
+                    <Card className="shadow-2xl border-2">
+                        <CardContent className="pt-6 pb-4 px-6">
+                            <div className="flex items-center justify-between mb-3">
+                                <div className="flex items-center gap-2">
+                                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-primary border-t-transparent"></div>
+                                    <span className="text-sm font-semibold">
+                                        Generating Certificates...
+                                    </span>
+                                </div>
+                                <span className="text-sm text-muted-foreground font-medium">
+                                    {generationProgress.progress}%
+                                </span>
+                            </div>
+                            <div className="w-full bg-secondary rounded-full h-2.5 overflow-hidden">
+                                <div
+                                    className="bg-primary h-full transition-all duration-300 ease-out rounded-full"
+                                    style={{ width: `${generationProgress.progress}%` }}
+                                />
+                            </div>
+                        </CardContent>
+                    </Card>
+                </div>
+            )}
         </div>
     );
 }

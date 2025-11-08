@@ -134,7 +134,10 @@ export default function TemplateBuilder() {
         // Draw text fields with visible boxes
         if (template?.textFields) {
             template.textFields.forEach((field) => {
-                ctx.font = `${field.fontSize}px ${field.fontFamily}`;
+                // Build font string with weight and style
+                const fontWeight = field.fontWeight || 'normal';
+                const fontStyle = field.fontStyle || 'normal';
+                ctx.font = `${fontStyle} ${fontWeight} ${field.fontSize}px ${field.fontFamily}`;
                 ctx.textAlign = field.alignment;
                 ctx.textBaseline = 'top';
 
@@ -250,6 +253,8 @@ export default function TemplateBuilder() {
             y: template.height / 2,
             fontSize: DEFAULT_FONT_SIZE,
             fontFamily: 'Arial',
+            fontWeight: 'normal',
+            fontStyle: 'normal',
             color: '#000000',
             alignment: 'center',
             textCase: 'none',
@@ -560,7 +565,7 @@ export default function TemplateBuilder() {
                         <div className="flex items-center justify-between mb-4">
                             <h3 className="font-semibold">Fields Editor</h3>
                             <DropdownMenu>
-                                <DropdownMenuTrigger >
+                                <DropdownMenuTrigger asChild>
                                     <Button variant="outline" size="sm" disabled={!template}>
                                         <Plus className="h-4 w-4 mr-2" />
                                         Add Field
@@ -642,6 +647,37 @@ export default function TemplateBuilder() {
                                             max={FONT_SIZE_MAX}
                                             step={1}
                                         />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label className="text-xs">Font Style</Label>
+                                        <div className="flex gap-1">
+                                            <Button
+                                                variant={field.fontWeight === 'bold' ? 'default' : 'outline'}
+                                                size="sm"
+                                                className="flex-1 h-7 text-xs font-bold"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    updateField(field.id, {
+                                                        fontWeight: field.fontWeight === 'bold' ? 'normal' : 'bold'
+                                                    });
+                                                }}
+                                            >
+                                                Bold
+                                            </Button>
+                                            <Button
+                                                variant={field.fontStyle === 'italic' ? 'default' : 'outline'}
+                                                size="sm"
+                                                className="flex-1 h-7 text-xs italic"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    updateField(field.id, {
+                                                        fontStyle: field.fontStyle === 'italic' ? 'normal' : 'italic'
+                                                    });
+                                                }}
+                                            >
+                                                Italic
+                                            </Button>
+                                        </div>
                                     </div>
                                     <div className="grid grid-cols-2 gap-2">
                                         <div className="space-y-2">
