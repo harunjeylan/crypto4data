@@ -1,15 +1,28 @@
 import { NextRequest, NextResponse } from 'next/server';
 import jsPDF from 'jspdf';
 
+// Configure route to handle large payloads (up to 1GB)
+export const maxDuration = 300; // 5 minutes timeout for large PDF exports
+export const runtime = 'nodejs';
+
 export async function POST(req: NextRequest) {
     try {
         let body;
         try {
             body = await req.json();
-        } catch (parseError) {
+        } catch (parseError: any) {
             console.error('Failed to parse request body:', parseError);
+
+            // Check if it's a connection reset or timeout error
+            if (parseError.code === 'ECONNRESET' || parseError.message?.includes('aborted')) {
+                return NextResponse.json(
+                    { error: 'Request body too large or connection reset. Try exporting fewer certificates at once, or the request timed out.' },
+                    { status: 413 }
+                );
+            }
+
             return NextResponse.json(
-                { error: 'Invalid JSON in request body' },
+                { error: `Invalid JSON in request body: ${parseError.message || 'Unknown error'}` },
                 { status: 400 }
             );
         }
@@ -133,4 +146,5 @@ export async function POST(req: NextRequest) {
         );
     }
 }
+
 

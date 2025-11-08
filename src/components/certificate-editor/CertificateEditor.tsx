@@ -713,15 +713,57 @@ export default function CertificateEditor({
                 setExportProgress({ progress: 74, isExporting: true, type: 'PDF' });
                 const requestBody = JSON.stringify(requestData);
 
+                // Check request size and log for monitoring
+                const requestSizeMB = (new Blob([requestBody]).size / (1024 * 1024)).toFixed(2);
+                const requestSizeGB = (new Blob([requestBody]).size / (1024 * 1024 * 1024)).toFixed(2);
+                const requestSize = parseFloat(requestSizeMB);
+                console.log(`Request body size: ${requestSizeMB} MB (${requestSizeGB} GB)`);
+
+                // Warn if request is very large (but allow up to 1GB)
+                if (requestSize > 500) {
+                    console.warn(`Request body is very large (${requestSizeMB} MB / ${requestSizeGB} GB). This may take longer to process.`);
+                }
+
+                // Block if request exceeds 1GB
+                if (requestSize > 1024) {
+                    const suggestedBatchSize = Math.ceil(certificates.length / 2);
+                    throw new Error(
+                        `Request body is too large (${requestSizeGB} GB). Maximum allowed is 1GB. ` +
+                        `Please try exporting fewer certificates at once (suggested: ${suggestedBatchSize} or fewer).`
+                    );
+                }
+
                 // Send rendered images to server for PDF assembly
                 setExportProgress({ progress: 75, isExporting: true, type: 'PDF' });
-                const response = await fetch('/api/export/pdf', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: requestBody,
-                });
+
+                // Use AbortController for better timeout handling (increased timeout for large requests)
+                const controller = new AbortController();
+                // Increase timeout based on request size: 5 minutes for large requests, 2 minutes for smaller ones
+                const timeoutDuration = requestSize > 100 ? 300000 : 120000; // 5 min for >100MB, 2 min otherwise
+                const timeoutId = setTimeout(() => controller.abort(), timeoutDuration);
+
+                let response;
+                try {
+                    response = await fetch('/api/export/pdf', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: requestBody,
+                        signal: controller.signal,
+                    });
+                } catch (fetchError: any) {
+                    clearTimeout(timeoutId);
+                    if (fetchError.name === 'AbortError') {
+                        throw new Error('Request timed out. The PDF export is taking too long. Try exporting fewer certificates at once.');
+                    }
+                    if (fetchError.code === 'ECONNRESET' || fetchError.message?.includes('aborted')) {
+                        throw new Error('Connection reset. The request body may be too large. Try exporting fewer certificates at once.');
+                    }
+                    throw fetchError;
+                } finally {
+                    clearTimeout(timeoutId);
+                }
 
                 // Update progress while waiting for response (75-90%)
                 setExportProgress({ progress: 80, isExporting: true, type: 'PDF' });
